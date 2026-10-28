@@ -24,10 +24,16 @@ export function auditStepLabel(step: string): string {
 const dateTime = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" });
 const preciseTime = new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "medium" });
 
+/** A hand-edited timestamp reaches the screen as stored, so the doctor sees what was written. */
+function format(formatter: Intl.DateTimeFormat, iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : formatter.format(date);
+}
+
 export function formatDateTime(iso: string): string {
-  return dateTime.format(new Date(iso));
+  return format(dateTime, iso);
 }
 
 export function formatPreciseTime(iso: string): string {
-  return preciseTime.format(new Date(iso));
+  return format(preciseTime, iso);
 }

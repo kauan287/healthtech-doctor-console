@@ -25,8 +25,13 @@ test("a doctor approves a pending prescription and sees the signed decision", as
   });
 
   await page.getByRole("link", { name: "Cola de recetas" }).click();
-  await page.getByRole("tab", { name: /^Pendientes/ }).click();
-  const row = page.getByRole("tabpanel").getByRole("link", { name: new RegExp(id) });
+  await page
+    .getByRole("navigation", { name: "Estado de la receta" })
+    .getByRole("link", { name: /^Pendientes/ })
+    .click();
+  const row = page
+    .getByRole("list", { name: "Recetas: Pendientes" })
+    .getByRole("link", { name: new RegExp(id) });
   await expect(row).toContainText("Paracetamol");
   await expect(row).toContainText("Pendiente");
   await row.click();
@@ -62,4 +67,13 @@ test("tampering with the stored audit chain hides the clinical data and the deci
   await expect(page.getByRole("button", { name: "Rechazar" })).toHaveCount(0);
   await expect(page.getByText("Paracetamol")).toHaveCount(0);
   await expect(page.getByText("Morfina")).toHaveCount(0);
+
+  tamper(id, "timestamp");
+  await page.reload();
+
+  await expect(page.getByRole("alert")).toContainText("Cadena manipulada:");
+  await expect(
+    page.getByRole("list", { name: "Cadena de auditoría" }).getByText("not-a-date").first(),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aprobar" })).toHaveCount(0);
 });

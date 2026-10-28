@@ -3,12 +3,24 @@ import { useNavigate } from "react-router";
 import { describeError } from "../api/errors";
 import { useCreatePrescription } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { usePageTitle } from "../components/usePageTitle";
 import { newPrescriptionId, PRESCRIPTION_ID_PATTERN } from "../domain/prescription";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none aria-invalid:border-red-500";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none disabled:bg-slate-100 aria-invalid:border-red-500";
+
+const MAX_ALLERGIES = 50;
+
+function withAllergy(allergies: string[], draft: string): string[] {
+  const allergy = draft.trim();
+  if (allergy === "" || allergies.some((known) => known.toLowerCase() === allergy.toLowerCase())) {
+    return allergies;
+  }
+  return [...allergies, allergy];
+}
 
 export function NewPrescriptionPage() {
+  usePageTitle("Nueva receta");
   const navigate = useNavigate();
   const create = useCreatePrescription();
   const [id, setId] = useState(() => newPrescriptionId());
@@ -20,14 +32,12 @@ export function NewPrescriptionPage() {
   const idError = PRESCRIPTION_ID_PATTERN.test(id)
     ? null
     : "Usa solo letras, números, puntos, guiones y guiones bajos, sin espacios.";
+  const showIdError = submitted && idError !== null;
   const symptomsError = symptoms.trim() === "" ? "Describe los síntomas del paciente." : null;
+  const allergiesFull = allergies.length >= MAX_ALLERGIES;
 
   function addAllergy() {
-    const allergy = allergyDraft.trim();
-    if (allergy === "") return;
-    if (!allergies.some((known) => known.toLowerCase() === allergy.toLowerCase())) {
-      setAllergies([...allergies, allergy]);
-    }
+    setAllergies(withAllergy(allergies, allergyDraft));
     setAllergyDraft("");
   }
 
@@ -43,7 +53,11 @@ export function NewPrescriptionPage() {
     setSubmitted(true);
     if (idError || symptomsError) return;
     create.mutate(
-      { prescription_id: id, patient_symptoms: symptoms.trim(), patient_allergies: allergies },
+      {
+        prescription_id: id,
+        patient_symptoms: symptoms.trim(),
+        patient_allergies: withAllergy(allergies, allergyDraft),
+      },
       {
         onSuccess: (rx) => {
           void navigate(`/prescriptions/${encodeURIComponent(rx.threadId)}`);
@@ -78,15 +92,15 @@ export function NewPrescriptionPage() {
               setId(event.target.value);
             }}
             maxLength={100}
-            aria-invalid={idError !== null}
+            aria-invalid={showIdError}
             aria-describedby="rx-id-hint"
             className={`${inputClass} mt-1 font-mono`}
           />
           <p
             id="rx-id-hint"
-            className={`mt-1 text-xs ${idError ? "font-medium text-red-700" : "text-slate-500"}`}
+            className={`mt-1 text-xs ${showIdError ? "font-medium text-red-700" : "text-slate-500"}`}
           >
-            {idError ?? "Generado automáticamente. Puedes editarlo."}
+            {showIdError ? idError : "Generado automáticamente. Puedes editarlo."}
           </p>
         </div>
 
@@ -127,6 +141,7 @@ export function NewPrescriptionPage() {
               }}
               onKeyDown={onAllergyKey}
               maxLength={200}
+              disabled={allergiesFull}
               placeholder="Ibuprofeno"
               aria-describedby="rx-allergy-hint"
               className={inputClass}
@@ -134,14 +149,16 @@ export function NewPrescriptionPage() {
             <button
               type="button"
               onClick={addAllergy}
-              disabled={allergies.length >= 50}
-              className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+              disabled={allergiesFull}
+              className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
             >
               Añadir
             </button>
           </div>
           <p id="rx-allergy-hint" className="mt-1 text-xs text-slate-500">
-            Pulsa Intro para añadir cada alergia.
+            {allergiesFull
+              ? `Has llegado al máximo de ${String(MAX_ALLERGIES)} alergias.`
+              : "Pulsa Intro para añadir cada alergia."}
           </p>
           {allergies.length > 0 && (
             <ul aria-label="Alergias añadidas" className="mt-2 flex flex-wrap gap-2">

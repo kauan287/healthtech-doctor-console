@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parsePrescription, type AuditTrail, type Prescription } from "../domain/prescription";
-import { api, unwrap } from "./client";
+import { api, ApiError, unwrap } from "./client";
 import type { components } from "./schema";
 
 type CreateRequest = components["schemas"]["CreatePrescriptionRequest"];
-type DecisionRequest = components["schemas"]["DoctorApprovalRequest"];
+export type Decision = components["schemas"]["DoctorApprovalRequest"];
 
 const QUEUE_REFRESH_MS = 15_000;
+export const QUEUE_LIMIT = 100;
 
 const keys = {
   list: ["prescriptions"] as const,
@@ -17,18 +18,26 @@ const keys = {
 export function usePrescriptions() {
   return useQuery({
     queryKey: keys.list,
-    queryFn: async ({ signal }): Promise<Prescription[]> => {
+    queryFn: async ({ signal }): Promise<{ prescriptions: Prescription[]; capped: boolean }> => {
       const { items } = await unwrap(
-        api.GET("/api/v1/prescriptions", { params: { query: { limit: 50 } }, signal }),
+        api.GET("/api/v1/prescriptions", { params: { query: { limit: QUEUE_LIMIT } }, signal }),
       );
-      return items.map(parsePrescription);
+      return { prescriptions: items.map(parsePrescription), capped: items.length === QUEUE_LIMIT };
     },
     refetchInterval: QUEUE_REFRESH_MS,
   });
 }
 
+/**
+ * The detail and the audit trail decide whether Approve is offered, so they are never served from
+ * a cache left by an earlier visit. Seeding them with setQueryData would bring back the default
+ * gcTime, because TanStack keeps the largest gcTime a query was ever given.
+ */
+const UNCACHED = { gcTime: 0 } as const;
+
 export function usePrescription(threadId: string) {
   return useQuery({
+    ...UNCACHED,
     queryKey: keys.detail(threadId),
     queryFn: async ({ signal }) =>
       parsePrescription(
@@ -44,6 +53,7 @@ export function usePrescription(threadId: string) {
 
 export function useAuditTrail(threadId: string) {
   return useQuery({
+    ...UNCACHED,
     queryKey: keys.audit(threadId),
     queryFn: ({ signal }): Promise<AuditTrail> =>
       unwrap(
@@ -60,17 +70,14 @@ export function useCreatePrescription() {
   return useMutation({
     mutationFn: async (body: CreateRequest) =>
       parsePrescription(await unwrap(api.POST("/api/v1/prescriptions", { body }))),
-    onSuccess: (prescription) => {
-      queryClient.setQueryData(keys.detail(prescription.threadId), prescription);
-      return queryClient.invalidateQueries({ queryKey: keys.list, exact: true });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.list, exact: true }),
   });
 }
 
 export function useDecision(threadId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: DecisionRequest) =>
+    mutationFn: async (body: Decision) =>
       parsePrescription(
         await unwrap(
           api.POST("/api/v1/prescriptions/{thread_id}/approve", {
@@ -85,6 +92,11 @@ export function useDecision(threadId: string) {
         queryClient.invalidateQueries({ queryKey: keys.audit(threadId) }),
         queryClient.invalidateQueries({ queryKey: keys.list, exact: true }),
       ]);
+    },
+    onError: (error) => {
+      if (!(error instanceof ApiError) || error.status !== 409) return;
+      // The detail key prefixes the audit key, so both refresh.
+      return queryClient.invalidateQueries({ queryKey: keys.detail(threadId) });
     },
   });
 }

@@ -1,51 +1,88 @@
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { describeError } from "../api/errors";
-import { useAuditTrail, usePrescription } from "../api/queries";
+import { useAuditTrail, useDecision, usePrescription } from "../api/queries";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DecisionPanel } from "../components/DecisionPanel";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { usePageTitle } from "../components/usePageTitle";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
-import type { AuditTrail, VerifiedPrescription } from "../domain/prescription";
+import { isTampered, type AuditTrail, type VerifiedPrescription } from "../domain/prescription";
 import { STATUS } from "../domain/status";
+
+const CONFLICT =
+  "No se pudo registrar tu decisión: la receta ya tenía una decisión o su cadena de auditoría dejó de ser válida. Abajo se muestra su estado actual.";
+
+function BackLink() {
+  return (
+    <Link
+      to="/"
+      className="text-sm text-teal-700 hover:underline focus-visible:outline-2 focus-visible:outline-teal-600"
+    >
+      ← Volver a la cola
+    </Link>
+  );
+}
 
 export function DetailPage() {
   const threadId = useParams().threadId ?? "";
   const prescription = usePrescription(threadId);
   const audit = useAuditTrail(threadId);
+  const decision = useDecision(threadId);
+  usePageTitle(prescription.data?.id ?? "Receta");
 
   const error = prescription.error ?? audit.error;
-  if (error) return <ErrorNotice message={describeError(error)} />;
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <BackLink />
+        <ErrorNotice message={describeError(error)} />
+        <button
+          type="button"
+          onClick={() => {
+            void prescription.refetch();
+            void audit.refetch();
+          }}
+          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-teal-800 shadow-sm ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
   if (!prescription.data || !audit.data) {
-    return <p className="py-12 text-center text-sm text-slate-500">Cargando receta…</p>;
+    return (
+      <p role="status" className="py-12 text-center text-sm text-slate-500">
+        Cargando receta…
+      </p>
+    );
   }
   const rx = prescription.data;
   const trail = audit.data;
+  const verified = !isTampered(rx) && trail.valid;
 
   return (
     <article aria-labelledby="rx-title" className="space-y-6">
       <div>
-        <Link
-          to="/"
-          className="text-sm text-teal-700 hover:underline focus-visible:outline-2 focus-visible:outline-teal-600"
-        >
-          ← Volver a la cola
-        </Link>
+        <BackLink />
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 id="rx-title" className="font-mono text-2xl font-semibold tracking-tight">
             {rx.id}
           </h1>
           <StatusBadge status={rx.status} />
         </div>
-        {rx.status !== "INVALID" && trail.valid && (
+        {verified && (
           <p className="mt-1 text-sm text-slate-600">Creada el {formatDateTime(rx.createdAt)}</p>
         )}
       </div>
 
       <ChainBanner trail={trail} />
+      {decision.error && (
+        <ErrorNotice message={describeError(decision.error, { conflict: CONFLICT })} />
+      )}
 
-      {rx.status === "INVALID" || !trail.valid ? (
+      {!verified ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <p className="h-fit rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
             Los datos clínicos no se muestran porque no se pueden verificar. No es posible aprobar
@@ -58,7 +95,12 @@ export function DetailPage() {
           <ClinicalRecord rx={rx} />
           <div className="space-y-6">
             {STATUS[rx.status].canDecide ? (
-              <DecisionPanel threadId={rx.threadId} />
+              <DecisionPanel
+                onDecide={(body) => {
+                  decision.mutate(body);
+                }}
+                pending={decision.isPending}
+              />
             ) : (
               rx.decision && (
                 <Card title="Decisión del médico" aside={<StatusBadge status={rx.status} />}>

@@ -8,15 +8,17 @@ function databasePath(): string {
   return path;
 }
 
-/** Rewrites a signed audit entry behind the API's back, as an attacker with database access would. */
-export function tamper(prescriptionId: string): void {
+const TAMPER = {
+  details:
+    "UPDATE audit_logs SET details = replace(details, 'Paracetamol', 'Morfina') WHERE prescription_id = ?",
+  timestamp: "UPDATE audit_logs SET timestamp = 'not-a-date' WHERE prescription_id = ?",
+};
+
+/** Rewrites signed audit entries behind the API's back, as an attacker with database access would. */
+export function tamper(prescriptionId: string, field: keyof typeof TAMPER = "details"): void {
   const db = new DatabaseSync(databasePath());
   try {
-    const { changes } = db
-      .prepare(
-        "UPDATE audit_logs SET details = replace(details, 'Paracetamol', 'Morfina') WHERE prescription_id = ?",
-      )
-      .run(prescriptionId);
+    const { changes } = db.prepare(TAMPER[field]).run(prescriptionId);
     if (changes === 0) throw new Error(`No audit entries to tamper with for ${prescriptionId}`);
   } finally {
     db.close();

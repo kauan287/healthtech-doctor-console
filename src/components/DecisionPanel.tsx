@@ -1,13 +1,13 @@
 import { useState, type SubmitEvent } from "react";
-import { describeError } from "../api/errors";
-import { useDecision } from "../api/queries";
-import { ErrorNotice } from "./ErrorNotice";
+import type { Decision } from "../api/queries";
 
-const CONFLICT =
-  "No se pudo registrar la decisión: la receta ya tiene una decisión o su cadena de auditoría no es válida. Recarga la página para ver su estado actual.";
-
-export function DecisionPanel({ threadId }: { threadId: string }) {
-  const decision = useDecision(threadId);
+export function DecisionPanel({
+  onDecide,
+  pending,
+}: {
+  onDecide: (decision: Decision) => void;
+  pending: boolean;
+}) {
   const [comments, setComments] = useState("");
   const [missingComment, setMissingComment] = useState(false);
 
@@ -18,7 +18,7 @@ export function DecisionPanel({ threadId }: { threadId: string }) {
       return;
     }
     setMissingComment(false);
-    decision.mutate({ approved, doctor_comments: trimmed });
+    onDecide({ approved, doctor_comments: trimmed });
   }
 
   function onSubmit(event: SubmitEvent) {
@@ -58,22 +58,17 @@ export function DecisionPanel({ threadId }: { threadId: string }) {
           ? "Escribe un comentario para rechazar la receta."
           : "Obligatorio para rechazar. Opcional para aprobar."}
       </p>
-      {decision.error && (
-        <div className="mt-3">
-          <ErrorNotice message={describeError(decision.error, { conflict: CONFLICT })} />
-        </div>
-      )}
       <div className="mt-4 flex gap-2">
         <button
           type="submit"
-          disabled={decision.isPending}
+          disabled={pending}
           className="flex-1 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
         >
           Aprobar
         </button>
         <button
           type="button"
-          disabled={decision.isPending}
+          disabled={pending}
           onClick={() => {
             decide(false);
           }}

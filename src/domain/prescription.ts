@@ -11,7 +11,7 @@ interface Identity {
   threadId: string;
 }
 
-/** The API withholds every clinical field once the audit chain fails verification. */
+/** A record whose audit chain failed verification. It carries no clinical fields to render. */
 export interface TamperedPrescription extends Identity {
   status: "INVALID";
 }
@@ -27,14 +27,25 @@ export interface VerifiedPrescription extends Identity {
 
 export type Prescription = TamperedPrescription | VerifiedPrescription;
 
+export function isTampered(rx: Prescription): rx is TamperedPrescription {
+  return rx.status === "INVALID";
+}
+
+/** The API answered, but with a shape the console's contract rules out. Retrying will not help. */
+export class ContractError extends Error {
+  override name = "ContractError";
+}
+
 function required<T>(value: T | null, field: string): T {
-  if (value === null) throw new Error(`Verified prescription is missing ${field}`);
+  if (value === null) throw new ContractError(`Verified prescription is missing ${field}`);
   return value;
 }
 
 export function parsePrescription(raw: ApiPrescription): Prescription {
   const identity = { id: raw.prescription_id, threadId: raw.thread_id };
-  if (raw.status === "INVALID") return { ...identity, status: raw.status };
+  if (raw.status === "INVALID" || !raw.audit_chain_valid) {
+    return { ...identity, status: "INVALID" };
+  }
   return {
     ...identity,
     status: raw.status,
