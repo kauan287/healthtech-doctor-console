@@ -11,7 +11,7 @@ interface Identity {
   threadId: string;
 }
 
-/** The API withholds every clinical field once the audit chain fails verification. */
+/** A record whose audit chain failed verification. It carries no clinical fields to render. */
 export interface TamperedPrescription extends Identity {
   status: "INVALID";
 }
@@ -34,7 +34,9 @@ function required<T>(value: T | null, field: string): T {
 
 export function parsePrescription(raw: ApiPrescription): Prescription {
   const identity = { id: raw.prescription_id, threadId: raw.thread_id };
-  if (raw.status === "INVALID") return { ...identity, status: raw.status };
+  if (raw.status === "INVALID" || !raw.audit_chain_valid) {
+    return { ...identity, status: "INVALID" };
+  }
   return {
     ...identity,
     status: raw.status,
