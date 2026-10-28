@@ -59,6 +59,7 @@ npm run dev
 ```
 
 Open http://localhost:5173. To use another API, set `VITE_API_URL`, for example `VITE_API_URL=https://healthtech-orchestrator.onrender.com npm run dev`.
+`npm run build` refuses to run without `VITE_API_URL`, so a production bundle never points at localhost by accident.
 
 ## Testing
 
@@ -75,7 +76,7 @@ The end-to-end tests tamper with the orchestrator's database, so they need its S
 
 ```bash
 npx playwright install chromium
-ORCHESTRATOR_DB=/tmp/orchestrator.db npm run test:e2e
+VITE_API_URL=http://localhost:8000 ORCHESTRATOR_DB=/tmp/orchestrator.db npm run test:e2e
 ```
 
 `npm run screenshots` creates fixed prescription ids, so run it against an orchestrator with an empty database.
