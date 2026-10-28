@@ -7,6 +7,7 @@ type CreateRequest = components["schemas"]["CreatePrescriptionRequest"];
 type DecisionRequest = components["schemas"]["DoctorApprovalRequest"];
 
 const QUEUE_REFRESH_MS = 15_000;
+export const QUEUE_LIMIT = 100;
 
 const keys = {
   list: ["prescriptions"] as const,
@@ -17,11 +18,11 @@ const keys = {
 export function usePrescriptions() {
   return useQuery({
     queryKey: keys.list,
-    queryFn: async ({ signal }): Promise<Prescription[]> => {
+    queryFn: async ({ signal }): Promise<{ prescriptions: Prescription[]; capped: boolean }> => {
       const { items } = await unwrap(
-        api.GET("/api/v1/prescriptions", { params: { query: { limit: 50 } }, signal }),
+        api.GET("/api/v1/prescriptions", { params: { query: { limit: QUEUE_LIMIT } }, signal }),
       );
-      return items.map(parsePrescription);
+      return { prescriptions: items.map(parsePrescription), capped: items.length === QUEUE_LIMIT };
     },
     refetchInterval: QUEUE_REFRESH_MS,
   });

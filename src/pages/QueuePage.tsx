@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from "react-router";
 import { describeError } from "../api/errors";
-import { usePrescriptions } from "../api/queries";
+import { QUEUE_LIMIT, usePrescriptions } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
@@ -23,10 +23,11 @@ export function QueuePage() {
   const [params, setParams] = useSearchParams();
   const active = tabFrom(params.get("estado"));
   const { data, error } = usePrescriptions();
+  const prescriptions = data?.prescriptions ?? [];
 
-  const counts = new Map<Tab, number>([["ALL", data?.length ?? 0]]);
-  for (const { status } of data ?? []) counts.set(status, (counts.get(status) ?? 0) + 1);
-  const visible = (data ?? []).filter((rx) => active === "ALL" || rx.status === active);
+  const counts = new Map<Tab, number>([["ALL", prescriptions.length]]);
+  for (const { status } of prescriptions) counts.set(status, (counts.get(status) ?? 0) + 1);
+  const visible = prescriptions.filter((rx) => active === "ALL" || rx.status === active);
 
   return (
     <section aria-labelledby="queue-title">
@@ -78,6 +79,11 @@ export function QueuePage() {
           <div className="mb-4">
             <ErrorNotice message={describeError(error)} />
           </div>
+        )}
+        {data?.capped && (
+          <p className="mb-4 text-sm text-slate-600">
+            Mostrando las {QUEUE_LIMIT} recetas más recientes.
+          </p>
         )}
         {!data ? (
           !error && <p className="py-12 text-center text-sm text-slate-500">Cargando recetas…</p>
