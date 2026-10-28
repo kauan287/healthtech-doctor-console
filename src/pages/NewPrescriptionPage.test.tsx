@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { expect, test } from "vitest";
 import { API } from "../test/fixtures";
@@ -66,4 +66,18 @@ test("an unconfirmed allergy that repeats a chip is sent once", async () => {
   expect(await submitWithAllergies("Ibuprofeno{Enter}ibuprofeno")).toEqual([
     { prescription_id: "RX-8", patient_symptoms: "Tos", patient_allergies: ["Ibuprofeno"] },
   ]);
+});
+
+test("Enter stops adding allergies at the API's limit of 50", async () => {
+  const { user } = renderApp("/new");
+  const keys = Array.from({ length: 51 }, (_, index) => `A${String(index + 1)}{Enter}`).join("");
+
+  await user.type(screen.getByLabelText("Alergias conocidas"), keys);
+
+  const chips = within(screen.getByRole("list", { name: "Alergias añadidas" })).getAllByRole(
+    "listitem",
+  );
+  expect(chips).toHaveLength(50);
+  expect(chips.at(-1)).toHaveTextContent("A50");
+  expect(screen.getByText("Has llegado al máximo de 50 alergias.")).toBeInTheDocument();
 });
