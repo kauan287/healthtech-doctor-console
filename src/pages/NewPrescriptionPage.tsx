@@ -30,8 +30,9 @@ export function NewPrescriptionPage() {
   const idError = PRESCRIPTION_ID_PATTERN.test(id)
     ? null
     : "Usa solo letras, números, puntos, guiones y guiones bajos, sin espacios.";
-  const allergiesFull = allergies.length >= MAX_ALLERGIES;
+  const showIdError = submitted && idError !== null;
   const symptomsError = symptoms.trim() === "" ? "Describe los síntomas del paciente." : null;
+  const allergiesFull = allergies.length >= MAX_ALLERGIES;
 
   function addAllergy() {
     setAllergies(withAllergy(allergies, allergyDraft));
@@ -89,15 +90,15 @@ export function NewPrescriptionPage() {
               setId(event.target.value);
             }}
             maxLength={100}
-            aria-invalid={idError !== null}
+            aria-invalid={showIdError}
             aria-describedby="rx-id-hint"
             className={`${inputClass} mt-1 font-mono`}
           />
           <p
             id="rx-id-hint"
-            className={`mt-1 text-xs ${idError ? "font-medium text-red-700" : "text-slate-500"}`}
+            className={`mt-1 text-xs ${showIdError ? "font-medium text-red-700" : "text-slate-500"}`}
           >
-            {idError ?? "Generado automáticamente. Puedes editarlo."}
+            {showIdError ? idError : "Generado automáticamente. Puedes editarlo."}
           </p>
         </div>
 
