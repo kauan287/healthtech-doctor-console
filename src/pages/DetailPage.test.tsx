@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { expect, test } from "vitest";
 import { API, pending, tampered, trail } from "../test/fixtures";
 import { renderApp } from "../test/render";
@@ -122,4 +122,32 @@ test("a response that breaks the contract is reported as such and not retried", 
     "La API devolvió una respuesta inesperada.",
   );
   expect(requests).toBe(1);
+});
+
+test("coming back to a prescription tampered with in the meantime never offers the cached decision", async () => {
+  serve(pending("RX-1"), true);
+  server.use(
+    http.get(`${API}/prescriptions`, () => HttpResponse.json({ items: [pending("RX-1")] })),
+  );
+  const { user } = renderApp("/prescriptions/session-RX-1");
+  expect(await screen.findByRole("button", { name: "Aprobar" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("link", { name: "← Volver a la cola" }));
+  const row = await screen.findByRole("link", { name: /RX-1/ });
+  server.use(
+    http.get(`${API}/prescriptions/session-RX-1`, async () => {
+      await delay(200);
+      return HttpResponse.json(tampered("RX-1"));
+    }),
+    http.get(`${API}/prescriptions/session-RX-1/audit`, async () => {
+      await delay(200);
+      return HttpResponse.json(trail("RX-1", false));
+    }),
+  );
+  await user.click(row);
+
+  expect(screen.getByText("Cargando receta…")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Aprobar" })).not.toBeInTheDocument();
+  expect(await screen.findByText(/Cadena manipulada/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Aprobar" })).not.toBeInTheDocument();
 });
