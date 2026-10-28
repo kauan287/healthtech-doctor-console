@@ -34,6 +34,24 @@ test("a tampered prescription shows the red banner and offers no decision", asyn
   expect(screen.queryByText("Paracetamol")).not.toBeInTheDocument();
 });
 
+test.each([
+  { case: "status INVALID", overrides: { status: "INVALID", audit_chain_valid: false } as const },
+  { case: "audit_chain_valid false", overrides: { audit_chain_valid: false } },
+])(
+  "a record flagged as tampered by $case renders none of the clinical fields it carries",
+  async ({ overrides }) => {
+    serve(pending("RX-9", overrides), true);
+    renderApp("/prescriptions/session-RX-9");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "RX-9" })).toBeInTheDocument();
+    expect(screen.getByText("Manipulada")).toBeInTheDocument();
+    for (const clinical of ["Paracetamol", "500 mg cada 8 horas", "Fiebre alta", "Ibuprofeno"]) {
+      expect(screen.queryByText(clinical, { exact: false })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: "Aprobar" })).not.toBeInTheDocument();
+  },
+);
+
 test("a hand-edited timestamp in a broken chain still shows the red banner", async () => {
   const audit = trail("RX-9", false);
   serve(tampered("RX-9"), {

@@ -46,3 +46,15 @@ test("a 429 from the API tells the doctor how long to wait", async () => {
     "Demasiadas solicitudes. Espera 42 s y vuelve a intentarlo.",
   );
 });
+
+test("a row whose audit chain failed verification shows no clinical data", async () => {
+  server.use(
+    http.get(`${API}/prescriptions`, () =>
+      HttpResponse.json({ items: [pending("RX-5", { audit_chain_valid: false })] }),
+    ),
+  );
+  renderApp("/?estado=ALL");
+
+  expect(await screen.findByText("Datos clínicos ocultos por manipulación")).toBeInTheDocument();
+  expect(screen.queryByText("Paracetamol")).not.toBeInTheDocument();
+});
