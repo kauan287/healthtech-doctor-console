@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parsePrescription, type AuditTrail, type Prescription } from "../domain/prescription";
-import { api, unwrap } from "./client";
+import { api, ApiError, unwrap } from "./client";
 import type { components } from "./schema";
 
 type CreateRequest = components["schemas"]["CreatePrescriptionRequest"];
-type DecisionRequest = components["schemas"]["DoctorApprovalRequest"];
+export type Decision = components["schemas"]["DoctorApprovalRequest"];
 
 const QUEUE_REFRESH_MS = 15_000;
 export const QUEUE_LIMIT = 100;
@@ -77,7 +77,7 @@ export function useCreatePrescription() {
 export function useDecision(threadId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: DecisionRequest) =>
+    mutationFn: async (body: Decision) =>
       parsePrescription(
         await unwrap(
           api.POST("/api/v1/prescriptions/{thread_id}/approve", {
@@ -92,6 +92,11 @@ export function useDecision(threadId: string) {
         queryClient.invalidateQueries({ queryKey: keys.audit(threadId) }),
         queryClient.invalidateQueries({ queryKey: keys.list, exact: true }),
       ]);
+    },
+    onError: (error) => {
+      if (!(error instanceof ApiError) || error.status !== 409) return;
+      // The detail key prefixes the audit key, so both refresh.
+      return queryClient.invalidateQueries({ queryKey: keys.detail(threadId) });
     },
   });
 }
