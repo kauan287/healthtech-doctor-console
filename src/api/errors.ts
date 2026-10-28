@@ -1,6 +1,8 @@
+import { ContractError } from "../domain/prescription";
 import { ApiError } from "./client";
 
 export function describeError(error: Error, { conflict }: { conflict?: string } = {}): string {
+  if (error instanceof ContractError) return "La API devolvió una respuesta inesperada.";
   if (!(error instanceof ApiError)) {
     return "No se pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.";
   }

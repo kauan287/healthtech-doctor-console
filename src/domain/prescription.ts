@@ -31,8 +31,13 @@ export function isTampered(rx: Prescription): rx is TamperedPrescription {
   return rx.status === "INVALID";
 }
 
+/** The API answered, but with a shape the console's contract rules out. Retrying will not help. */
+export class ContractError extends Error {
+  override name = "ContractError";
+}
+
 function required<T>(value: T | null, field: string): T {
-  if (value === null) throw new Error(`Verified prescription is missing ${field}`);
+  if (value === null) throw new ContractError(`Verified prescription is missing ${field}`);
   return value;
 }
 
