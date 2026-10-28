@@ -5,13 +5,18 @@ import { API, pending, tampered, trail } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
 
-function serve(prescription: ReturnType<typeof pending>, valid: boolean) {
+function serve(
+  prescription: ReturnType<typeof pending>,
+  audit: ReturnType<typeof trail> | boolean,
+) {
   server.use(
     http.get(`${API}/prescriptions/${prescription.thread_id}`, () =>
       HttpResponse.json(prescription),
     ),
     http.get(`${API}/prescriptions/${prescription.thread_id}/audit`, () =>
-      HttpResponse.json(trail(prescription.prescription_id, valid)),
+      HttpResponse.json(
+        typeof audit === "boolean" ? trail(prescription.prescription_id, audit) : audit,
+      ),
     ),
   );
 }
@@ -27,6 +32,20 @@ test("a tampered prescription shows the red banner and offers no decision", asyn
   expect(screen.queryByRole("button", { name: "Aprobar" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Rechazar" })).not.toBeInTheDocument();
   expect(screen.queryByText("Paracetamol")).not.toBeInTheDocument();
+});
+
+test("a hand-edited timestamp in a broken chain still shows the red banner", async () => {
+  const audit = trail("RX-9", false);
+  serve(tampered("RX-9"), {
+    ...audit,
+    entries: audit.entries.map((entry) => ({ ...entry, timestamp: "not-a-date" })),
+  });
+  renderApp("/prescriptions/session-RX-9");
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Cadena manipulada: Entry 0 has an invalid signature.",
+  );
+  expect(screen.getAllByText("not-a-date")).toHaveLength(2);
 });
 
 test("rejecting without a comment is blocked before any request is sent", async () => {
