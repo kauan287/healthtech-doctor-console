@@ -9,10 +9,11 @@ import { isStatus, STATUS, STATUSES } from "../domain/status";
 
 type Tab = Status | "ALL";
 
-const TABS: readonly { tab: Tab; label: string }[] = [
-  ...STATUSES.map((status) => ({ tab: status, label: STATUS[status].tab })),
-  { tab: "ALL", label: "Todas" },
-];
+const TABS: readonly Tab[] = [...STATUSES, "ALL"];
+
+function tabLabel(tab: Tab): string {
+  return tab === "ALL" ? "Todas" : STATUS[tab].tab;
+}
 
 function tabFrom(param: string | null): Tab {
   if (param === "ALL") return "ALL";
@@ -20,7 +21,7 @@ function tabFrom(param: string | null): Tab {
 }
 
 export function QueuePage() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const active = tabFrom(params.get("estado"));
   const { data, error } = usePrescriptions();
   const prescriptions = data?.prescriptions ?? [];
@@ -48,60 +49,57 @@ export function QueuePage() {
         </Link>
       </div>
 
-      <div role="tablist" aria-label="Estado de la receta" className="mb-4 flex flex-wrap gap-2">
-        {TABS.map(({ tab, label }) => (
-          <button
+      <nav aria-label="Estado de la receta" className="mb-4 flex flex-wrap gap-2">
+        {TABS.map((tab) => (
+          <Link
             key={tab}
-            type="button"
-            role="tab"
-            aria-selected={tab === active}
-            onClick={() => {
-              setParams(tab === "PENDING_APPROVAL" ? {} : { estado: tab });
-            }}
+            to={tab === "PENDING_APPROVAL" ? "/" : `/?estado=${tab}`}
+            aria-current={tab === active ? "page" : undefined}
             className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ring-1 ring-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
               tab === active
                 ? "bg-teal-700 text-white ring-teal-700"
                 : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-100"
             }`}
           >
-            {label}{" "}
+            {tabLabel(tab)}{" "}
             <span
               className={`rounded-full px-2 text-xs tabular-nums ${tab === active ? "bg-white/20" : "bg-slate-100 text-slate-600"}`}
             >
               {counts.get(tab) ?? 0}
             </span>
-          </button>
+          </Link>
         ))}
-      </div>
+      </nav>
 
-      <div role="tabpanel" aria-label={TABS.find(({ tab }) => tab === active)?.label}>
-        {error && (
-          <div className="mb-4">
-            <ErrorNotice message={describeError(error)} />
-          </div>
-        )}
-        {data?.capped && (
-          <p className="mb-4 text-sm text-slate-600">
-            Mostrando las {QUEUE_LIMIT} recetas más recientes.
+      {error && (
+        <div className="mb-4">
+          <ErrorNotice message={describeError(error)} />
+        </div>
+      )}
+      {data?.capped && (
+        <p className="mb-4 text-sm text-slate-600">
+          Mostrando las {QUEUE_LIMIT} recetas más recientes.
+        </p>
+      )}
+      {!data ? (
+        !error && <p className="py-12 text-center text-sm text-slate-500">Cargando recetas…</p>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+          <p className="font-medium text-slate-800">No hay recetas en esta lista.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Las nuevas propuestas aparecerán aquí automáticamente.
           </p>
-        )}
-        {!data ? (
-          !error && <p className="py-12 text-center text-sm text-slate-500">Cargando recetas…</p>
-        ) : visible.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-            <p className="font-medium text-slate-800">No hay recetas en esta lista.</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Las nuevas propuestas aparecerán aquí automáticamente.
-            </p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {visible.map((rx) => (
-              <QueueRow key={rx.threadId} prescription={rx} />
-            ))}
-          </ul>
-        )}
-      </div>
+        </div>
+      ) : (
+        <ul
+          aria-label={`Recetas: ${tabLabel(active)}`}
+          className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+        >
+          {visible.map((rx) => (
+            <QueueRow key={rx.threadId} prescription={rx} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
