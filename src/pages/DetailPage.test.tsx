@@ -180,3 +180,12 @@ test("coming back to a prescription tampered with in the meantime never offers t
   expect(await screen.findByText(/Cadena manipulada/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Aprobar" })).not.toBeInTheDocument();
 });
+
+test("the detail names the window after the prescription and announces that it is loading", async () => {
+  serve(pending("RX-1"), true);
+  renderApp("/prescriptions/session-RX-1");
+
+  expect(screen.getByRole("status")).toHaveTextContent("Cargando receta…");
+  expect(await screen.findByRole("heading", { level: 1, name: "RX-1" })).toBeInTheDocument();
+  expect(document.title).toBe("RX-1 · HealthTech");
+});

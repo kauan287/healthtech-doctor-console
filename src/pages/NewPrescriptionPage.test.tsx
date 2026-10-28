@@ -107,3 +107,9 @@ test("the id and the symptoms are both checked when the form is submitted", asyn
   expect(screen.getByText("Describe los síntomas del paciente.")).toBeInTheDocument();
   expect(bodies).toEqual([]);
 });
+
+test("the form names the window", () => {
+  renderApp("/new");
+
+  expect(document.title).toBe("Nueva receta · HealthTech");
+});

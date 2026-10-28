@@ -1,5 +1,5 @@
 import { screen, within } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { expect, test } from "vitest";
 import { API, decided, pending, tampered } from "../test/fixtures";
 import { renderApp } from "../test/render";
@@ -99,4 +99,18 @@ test("a row whose audit chain failed verification shows no clinical data", async
 
   expect(await screen.findByText("Datos clínicos ocultos por manipulación")).toBeInTheDocument();
   expect(screen.queryByText("Paracetamol")).not.toBeInTheDocument();
+});
+
+test("the queue names the window and announces that it is loading", async () => {
+  server.use(
+    http.get(`${API}/prescriptions`, async () => {
+      await delay(100);
+      return HttpResponse.json({ items: [] });
+    }),
+  );
+  renderApp("/");
+
+  expect(screen.getByRole("status")).toHaveTextContent("Cargando recetas…");
+  expect(document.title).toBe("Cola de recetas · HealthTech");
+  expect(await screen.findByText("No hay recetas en esta lista.")).toBeInTheDocument();
 });
