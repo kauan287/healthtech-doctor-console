@@ -5,6 +5,7 @@ import { useAuditTrail, useDecision, usePrescription } from "../api/queries";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DecisionPanel } from "../components/DecisionPanel";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { usePageTitle } from "../components/usePageTitle";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
 import { isTampered, type AuditTrail, type VerifiedPrescription } from "../domain/prescription";
@@ -29,6 +30,7 @@ export function DetailPage() {
   const prescription = usePrescription(threadId);
   const audit = useAuditTrail(threadId);
   const decision = useDecision(threadId);
+  usePageTitle(prescription.data?.id ?? "Receta");
 
   const error = prescription.error ?? audit.error;
   if (error) {
@@ -50,7 +52,11 @@ export function DetailPage() {
     );
   }
   if (!prescription.data || !audit.data) {
-    return <p className="py-12 text-center text-sm text-slate-500">Cargando receta…</p>;
+    return (
+      <p role="status" className="py-12 text-center text-sm text-slate-500">
+        Cargando receta…
+      </p>
+    );
   }
   const rx = prescription.data;
   const trail = audit.data;

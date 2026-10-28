@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { describeError } from "../api/errors";
 import { useCreatePrescription } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { usePageTitle } from "../components/usePageTitle";
 import { newPrescriptionId, PRESCRIPTION_ID_PATTERN } from "../domain/prescription";
 
 const inputClass =
@@ -19,6 +20,7 @@ function withAllergy(allergies: string[], draft: string): string[] {
 }
 
 export function NewPrescriptionPage() {
+  usePageTitle("Nueva receta");
   const navigate = useNavigate();
   const create = useCreatePrescription();
   const [id, setId] = useState(() => newPrescriptionId());

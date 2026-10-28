@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router";
 import { describeError } from "../api/errors";
 import { QUEUE_LIMIT, usePrescriptions } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { usePageTitle } from "../components/usePageTitle";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
 import { isTampered, type Prescription, type Status } from "../domain/prescription";
@@ -21,6 +22,7 @@ function tabFrom(param: string | null): Tab {
 }
 
 export function QueuePage() {
+  usePageTitle("Cola de recetas");
   const [params] = useSearchParams();
   const active = tabFrom(params.get("estado"));
   const { data, error } = usePrescriptions();
@@ -82,7 +84,11 @@ export function QueuePage() {
         </p>
       )}
       {!data ? (
-        !error && <p className="py-12 text-center text-sm text-slate-500">Cargando recetas…</p>
+        !error && (
+          <p role="status" className="py-12 text-center text-sm text-slate-500">
+            Cargando recetas…
+          </p>
+        )
       ) : visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
           <p className="font-medium text-slate-800">No hay recetas en esta lista.</p>
