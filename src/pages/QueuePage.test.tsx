@@ -29,6 +29,22 @@ test("tabs count prescriptions per status and the pending tab lists only pending
     expect.stringContaining("RX-4"),
     expect.stringContaining("RX-1"),
   ]);
+  expect(screen.queryByText(/Mostrando las/)).not.toBeInTheDocument();
+});
+
+test("a full page from the API says only the newest 100 are shown", async () => {
+  server.use(
+    http.get(`${API}/prescriptions`, ({ request }) => {
+      const limit = Number(new URL(request.url).searchParams.get("limit"));
+      return HttpResponse.json({
+        items: Array.from({ length: limit }, (_, index) => pending(`RX-${String(index)}`)),
+      });
+    }),
+  );
+  renderApp("/");
+
+  expect(await screen.findByText("Mostrando las 100 recetas más recientes.")).toBeInTheDocument();
+  expect(screen.getByText(/^Todas/)).toHaveTextContent("Todas 100");
 });
 
 test("a 429 from the API tells the doctor how long to wait", async () => {
