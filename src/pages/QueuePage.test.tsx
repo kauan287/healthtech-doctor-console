@@ -47,21 +47,40 @@ test("a full page from the API says only the newest 100 are shown", async () => 
   expect(screen.getByText(/^Todas/)).toHaveTextContent("Todas 100");
 });
 
-test("a 429 from the API tells the doctor how long to wait", async () => {
+test("a 429 from the API tells the doctor how long to wait and is not retried", async () => {
+  let requests = 0;
   server.use(
-    http.get(`${API}/prescriptions`, () =>
-      HttpResponse.json(
+    http.get(`${API}/prescriptions`, () => {
+      requests += 1;
+      return HttpResponse.json(
         { detail: "Too many requests." },
         { status: 429, headers: { "Retry-After": "42" } },
-      ),
-    ),
+      );
+    }),
   );
   renderApp("/");
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Demasiadas solicitudes. Espera 42 s y vuelve a intentarlo.",
   );
+  expect(requests).toBe(1);
 });
+
+test("two 5xx responses in a row are retried until the list loads", async () => {
+  let requests = 0;
+  server.use(
+    http.get(`${API}/prescriptions`, () => {
+      requests += 1;
+      return requests <= 2
+        ? HttpResponse.json({ detail: "Upstream unavailable." }, { status: 503 })
+        : HttpResponse.json({ items: [pending("RX-1")] });
+    }),
+  );
+  renderApp("/");
+
+  expect(await screen.findByText("Paracetamol", {}, { timeout: 5_000 })).toBeInTheDocument();
+  expect(requests).toBe(3);
+}, 10_000);
 
 test("a row whose audit chain failed verification shows no clinical data", async () => {
   server.use(

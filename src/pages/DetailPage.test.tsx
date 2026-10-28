@@ -104,3 +104,22 @@ test("a 409 on approve explains the conflict in Spanish", async () => {
     "No se pudo registrar la decisión: la receta ya tiene una decisión o su cadena de auditoría no es válida.",
   );
 });
+
+test("a response that breaks the contract is reported as such and not retried", async () => {
+  let requests = 0;
+  server.use(
+    http.get(`${API}/prescriptions/session-RX-1`, () => {
+      requests += 1;
+      return HttpResponse.json(pending("RX-1", { created_at: null }));
+    }),
+    http.get(`${API}/prescriptions/session-RX-1/audit`, () =>
+      HttpResponse.json(trail("RX-1", true)),
+    ),
+  );
+  renderApp("/prescriptions/session-RX-1");
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "La API devolvió una respuesta inesperada.",
+  );
+  expect(requests).toBe(1);
+});
