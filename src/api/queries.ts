@@ -28,8 +28,16 @@ export function usePrescriptions() {
   });
 }
 
+/**
+ * The detail and the audit trail decide whether Approve is offered, so they are never served from
+ * a cache left by an earlier visit. Seeding them with setQueryData would bring back the default
+ * gcTime, because TanStack keeps the largest gcTime a query was ever given.
+ */
+const UNCACHED = { gcTime: 0 } as const;
+
 export function usePrescription(threadId: string) {
   return useQuery({
+    ...UNCACHED,
     queryKey: keys.detail(threadId),
     queryFn: async ({ signal }) =>
       parsePrescription(
@@ -45,6 +53,7 @@ export function usePrescription(threadId: string) {
 
 export function useAuditTrail(threadId: string) {
   return useQuery({
+    ...UNCACHED,
     queryKey: keys.audit(threadId),
     queryFn: ({ signal }): Promise<AuditTrail> =>
       unwrap(
@@ -61,10 +70,7 @@ export function useCreatePrescription() {
   return useMutation({
     mutationFn: async (body: CreateRequest) =>
       parsePrescription(await unwrap(api.POST("/api/v1/prescriptions", { body }))),
-    onSuccess: (prescription) => {
-      queryClient.setQueryData(keys.detail(prescription.threadId), prescription);
-      return queryClient.invalidateQueries({ queryKey: keys.list, exact: true });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.list, exact: true }),
   });
 }
 
