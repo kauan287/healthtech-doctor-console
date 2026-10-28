@@ -27,6 +27,10 @@ export interface VerifiedPrescription extends Identity {
 
 export type Prescription = TamperedPrescription | VerifiedPrescription;
 
+export function isTampered(rx: Prescription): rx is TamperedPrescription {
+  return rx.status === "INVALID";
+}
+
 function required<T>(value: T | null, field: string): T {
   if (value === null) throw new Error(`Verified prescription is missing ${field}`);
   return value;

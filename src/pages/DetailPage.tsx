@@ -7,7 +7,7 @@ import { DecisionPanel } from "../components/DecisionPanel";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
-import type { AuditTrail, VerifiedPrescription } from "../domain/prescription";
+import { isTampered, type AuditTrail, type VerifiedPrescription } from "../domain/prescription";
 import { STATUS } from "../domain/status";
 
 export function DetailPage() {
@@ -22,6 +22,7 @@ export function DetailPage() {
   }
   const rx = prescription.data;
   const trail = audit.data;
+  const verified = !isTampered(rx) && trail.valid;
 
   return (
     <article aria-labelledby="rx-title" className="space-y-6">
@@ -38,14 +39,14 @@ export function DetailPage() {
           </h1>
           <StatusBadge status={rx.status} />
         </div>
-        {rx.status !== "INVALID" && trail.valid && (
+        {verified && (
           <p className="mt-1 text-sm text-slate-600">Creada el {formatDateTime(rx.createdAt)}</p>
         )}
       </div>
 
       <ChainBanner trail={trail} />
 
-      {rx.status === "INVALID" || !trail.valid ? (
+      {!verified ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <p className="h-fit rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
             Los datos clínicos no se muestran porque no se pueden verificar. No es posible aprobar

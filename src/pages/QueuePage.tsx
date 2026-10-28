@@ -4,7 +4,7 @@ import { usePrescriptions } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
-import type { Prescription, Status } from "../domain/prescription";
+import { isTampered, type Prescription, type Status } from "../domain/prescription";
 import { isStatus, STATUS, STATUSES } from "../domain/status";
 
 type Tab = Status | "ALL";
@@ -108,7 +108,7 @@ function QueueRow({ prescription: rx }: { prescription: Prescription }) {
         className="grid gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600 sm:grid-cols-[13rem_12rem_minmax(0,1fr)_auto] sm:items-center"
       >
         <span className="font-mono text-sm font-medium text-slate-900">{rx.id}</span>
-        {rx.status === "INVALID" ? (
+        {isTampered(rx) ? (
           <span className="text-sm text-slate-500 sm:col-span-2">
             Datos clínicos ocultos por manipulación
           </span>
@@ -119,7 +119,7 @@ function QueueRow({ prescription: rx }: { prescription: Prescription }) {
           </>
         )}
         <span className="flex flex-wrap gap-1.5 sm:justify-end">
-          {rx.status !== "INVALID" && (
+          {!isTampered(rx) && (
             <>
               <UrgencyBadge urgency={rx.proposal.urgency} />
               <SafetyBadge approved={rx.safety.approved} />
