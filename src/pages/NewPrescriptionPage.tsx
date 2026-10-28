@@ -6,7 +6,9 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { newPrescriptionId, PRESCRIPTION_ID_PATTERN } from "../domain/prescription";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none aria-invalid:border-red-500";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none disabled:bg-slate-100 aria-invalid:border-red-500";
+
+const MAX_ALLERGIES = 50;
 
 function withAllergy(allergies: string[], draft: string): string[] {
   const allergy = draft.trim();
@@ -28,6 +30,7 @@ export function NewPrescriptionPage() {
   const idError = PRESCRIPTION_ID_PATTERN.test(id)
     ? null
     : "Usa solo letras, números, puntos, guiones y guiones bajos, sin espacios.";
+  const allergiesFull = allergies.length >= MAX_ALLERGIES;
   const symptomsError = symptoms.trim() === "" ? "Describe los síntomas del paciente." : null;
 
   function addAllergy() {
@@ -135,6 +138,7 @@ export function NewPrescriptionPage() {
               }}
               onKeyDown={onAllergyKey}
               maxLength={200}
+              disabled={allergiesFull}
               placeholder="Ibuprofeno"
               aria-describedby="rx-allergy-hint"
               className={inputClass}
@@ -142,14 +146,16 @@ export function NewPrescriptionPage() {
             <button
               type="button"
               onClick={addAllergy}
-              disabled={allergies.length >= 50}
-              className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+              disabled={allergiesFull}
+              className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
             >
               Añadir
             </button>
           </div>
           <p id="rx-allergy-hint" className="mt-1 text-xs text-slate-500">
-            Pulsa Intro para añadir cada alergia.
+            {allergiesFull
+              ? `Has llegado al máximo de ${String(MAX_ALLERGIES)} alergias.`
+              : "Pulsa Intro para añadir cada alergia."}
           </p>
           {allergies.length > 0 && (
             <ul aria-label="Alergias añadidas" className="mt-2 flex flex-wrap gap-2">
