@@ -81,3 +81,29 @@ test("Enter stops adding allergies at the API's limit of 50", async () => {
   expect(chips.at(-1)).toHaveTextContent("A50");
   expect(screen.getByText("Has llegado al máximo de 50 alergias.")).toBeInTheDocument();
 });
+
+test("the id and the symptoms are both checked when the form is submitted", async () => {
+  const bodies: unknown[] = [];
+  server.use(
+    http.post(`${API}/prescriptions`, async ({ request }) => {
+      bodies.push(await request.json());
+      return HttpResponse.json({}, { status: 500 });
+    }),
+  );
+  const { user } = renderApp("/new");
+  const id = screen.getByLabelText("Identificador de la receta");
+
+  await user.clear(id);
+  await user.type(id, "RX 1");
+  expect(id).toHaveAttribute("aria-invalid", "false");
+  expect(screen.getByText("Generado automáticamente. Puedes editarlo.")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Crear receta" }));
+  expect(id).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByLabelText("Síntomas")).toHaveAttribute("aria-invalid", "true");
+  expect(
+    screen.getByText("Usa solo letras, números, puntos, guiones y guiones bajos, sin espacios."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Describe los síntomas del paciente.")).toBeInTheDocument();
+  expect(bodies).toEqual([]);
+});
