@@ -32,3 +32,38 @@ test("a duplicate id sends the allergy chips and names the id that already exist
     { prescription_id: "RX-7", patient_symptoms: "Fiebre", patient_allergies: ["Ibuprofeno"] },
   ]);
 });
+
+async function submitWithAllergies(keys: string) {
+  const bodies: unknown[] = [];
+  server.use(
+    http.post(`${API}/prescriptions`, async ({ request }) => {
+      bodies.push(await request.json());
+      return HttpResponse.json({ detail: "Prescription RX-8 already exists." }, { status: 409 });
+    }),
+  );
+  const { user } = renderApp("/new");
+  const id = screen.getByLabelText("Identificador de la receta");
+  await user.clear(id);
+  await user.type(id, "RX-8");
+  await user.type(screen.getByLabelText("Síntomas"), "Tos");
+  await user.type(screen.getByLabelText("Alergias conocidas"), keys);
+  await user.click(screen.getByRole("button", { name: "Crear receta" }));
+  await screen.findByRole("alert");
+  return bodies;
+}
+
+test("an allergy typed but not confirmed with Enter is still sent", async () => {
+  expect(await submitWithAllergies("Ibuprofeno{Enter}  Polen ")).toEqual([
+    {
+      prescription_id: "RX-8",
+      patient_symptoms: "Tos",
+      patient_allergies: ["Ibuprofeno", "Polen"],
+    },
+  ]);
+});
+
+test("an unconfirmed allergy that repeats a chip is sent once", async () => {
+  expect(await submitWithAllergies("Ibuprofeno{Enter}ibuprofeno")).toEqual([
+    { prescription_id: "RX-8", patient_symptoms: "Tos", patient_allergies: ["Ibuprofeno"] },
+  ]);
+});
