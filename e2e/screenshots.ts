@@ -52,7 +52,7 @@ test("README screenshots", async ({ page, request }) => {
   tamper("RX-20261028-7A21");
 
   await page.goto("/?estado=ALL");
-  await expect(page.getByRole("tab", { name: "Todas 5" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Todas 5" })).toBeVisible();
   await page.screenshot({ path: "docs/queue.png" });
 
   await page.goto("/prescriptions/session-RX-20261028-C05E");

@@ -19,7 +19,7 @@ test("a request still pending after 3 s says the server is waking up, then the n
     await screen.findByText(/Despertando el servidor/, {}, { timeout: 3_400 }),
   ).toBeInTheDocument();
   expect(
-    await screen.findByRole("tab", { name: "Pendientes 1" }, { timeout: 2_000 }),
+    await screen.findByRole("link", { name: "Pendientes 1" }, { timeout: 2_000 }),
   ).toBeInTheDocument();
   expect(screen.queryByText(/Despertando el servidor/)).not.toBeInTheDocument();
 }, 10_000);

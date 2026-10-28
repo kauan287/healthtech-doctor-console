@@ -5,7 +5,7 @@ import { API, decided, pending, tampered } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
 
-test("tabs count prescriptions per status and the pending tab lists only pending ones", async () => {
+test("status filters count prescriptions per status and the pending filter lists only pending ones", async () => {
   server.use(
     http.get(`${API}/prescriptions`, () =>
       HttpResponse.json({
@@ -15,16 +15,23 @@ test("tabs count prescriptions per status and the pending tab lists only pending
   );
   renderApp("/");
 
-  expect(await screen.findByRole("tab", { name: "Pendientes 2" })).toHaveAttribute(
-    "aria-selected",
-    "true",
+  const filters = within(await screen.findByRole("navigation", { name: "Estado de la receta" }));
+  expect(await filters.findByRole("link", { name: "Pendientes 2" })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
-  expect(screen.getByRole("tab", { name: "Aprobadas 1" })).toBeInTheDocument();
-  expect(screen.getByRole("tab", { name: "Rechazadas 0" })).toBeInTheDocument();
-  expect(screen.getByRole("tab", { name: "Manipuladas 1" })).toBeInTheDocument();
-  expect(screen.getByRole("tab", { name: "Todas 4" })).toBeInTheDocument();
+  expect(filters.getByRole("link", { name: "Aprobadas 1" })).toHaveAttribute(
+    "href",
+    "/?estado=APPROVED",
+  );
+  expect(filters.getByRole("link", { name: "Aprobadas 1" })).not.toHaveAttribute("aria-current");
+  expect(filters.getByRole("link", { name: "Rechazadas 0" })).toBeInTheDocument();
+  expect(filters.getByRole("link", { name: "Manipuladas 1" })).toBeInTheDocument();
+  expect(filters.getByRole("link", { name: "Todas 4" })).toBeInTheDocument();
 
-  const rows = within(screen.getByRole("tabpanel")).getAllByRole("link");
+  const rows = within(screen.getByRole("list", { name: "Recetas: Pendientes" })).getAllByRole(
+    "link",
+  );
   expect(rows.map((row) => row.textContent)).toEqual([
     expect.stringContaining("RX-4"),
     expect.stringContaining("RX-1"),
