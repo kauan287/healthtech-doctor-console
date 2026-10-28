@@ -8,6 +8,14 @@ import { newPrescriptionId, PRESCRIPTION_ID_PATTERN } from "../domain/prescripti
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none aria-invalid:border-red-500";
 
+function withAllergy(allergies: string[], draft: string): string[] {
+  const allergy = draft.trim();
+  if (allergy === "" || allergies.some((known) => known.toLowerCase() === allergy.toLowerCase())) {
+    return allergies;
+  }
+  return [...allergies, allergy];
+}
+
 export function NewPrescriptionPage() {
   const navigate = useNavigate();
   const create = useCreatePrescription();
@@ -23,11 +31,7 @@ export function NewPrescriptionPage() {
   const symptomsError = symptoms.trim() === "" ? "Describe los síntomas del paciente." : null;
 
   function addAllergy() {
-    const allergy = allergyDraft.trim();
-    if (allergy === "") return;
-    if (!allergies.some((known) => known.toLowerCase() === allergy.toLowerCase())) {
-      setAllergies([...allergies, allergy]);
-    }
+    setAllergies(withAllergy(allergies, allergyDraft));
     setAllergyDraft("");
   }
 
@@ -43,7 +47,11 @@ export function NewPrescriptionPage() {
     setSubmitted(true);
     if (idError || symptomsError) return;
     create.mutate(
-      { prescription_id: id, patient_symptoms: symptoms.trim(), patient_allergies: allergies },
+      {
+        prescription_id: id,
+        patient_symptoms: symptoms.trim(),
+        patient_allergies: withAllergy(allergies, allergyDraft),
+      },
       {
         onSuccess: (rx) => {
           void navigate(`/prescriptions/${encodeURIComponent(rx.threadId)}`);
