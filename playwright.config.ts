@@ -18,10 +18,17 @@ export default defineConfig({
     { name: "e2e", testMatch: "*.spec.ts" },
     { name: "screenshots", testMatch: "screenshots.ts" },
   ],
-  webServer: {
-    command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
+      url: `http://localhost:${PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: "node e2e/fhir-server.ts",
+      url: "http://localhost:8090/fhir/metadata",
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });
