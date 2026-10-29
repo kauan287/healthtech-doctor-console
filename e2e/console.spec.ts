@@ -52,12 +52,13 @@ test("a doctor approves a pending prescription and sees the signed decision", as
   ).toBeVisible();
 });
 
-test("tampering with the stored audit chain hides the clinical data and the decision panel", async ({
+test("tampering with the stored audit chain hides the clinical data, the decision panel and the FHIR export", async ({
   page,
 }) => {
   const id = uniqueId("RX-E2E-TAMPER");
   await createPrescription(page, { id, symptoms: "Fiebre y malestar general", allergies: [] });
   await expect(page.getByRole("button", { name: "Aprobar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar FHIR (JSON)" })).toBeVisible();
 
   tamper(id);
   await page.reload();
@@ -66,6 +67,7 @@ test("tampering with the stored audit chain hides the clinical data and the deci
   await expect(page.locator("main").getByText("Manipulada", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Aprobar" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Rechazar" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Exportar FHIR (JSON)" })).toHaveCount(0);
   await expect(page.getByText("Paracetamol")).toHaveCount(0);
   await expect(page.getByText("Morfina")).toHaveCount(0);
 
