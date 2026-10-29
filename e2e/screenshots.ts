@@ -58,4 +58,16 @@ test("README screenshots", async ({ page, request }) => {
   await page.goto("/prescriptions/session-RX-20261028-C05E");
   await expect(page.getByRole("button", { name: "Aprobar" })).toBeVisible();
   await page.screenshot({ path: "docs/detail.png" });
+
+  const fromFhir = await request.post(`${API_URL}/api/v1/prescriptions/from-fhir`, {
+    data: {
+      prescription_id: "RX-20261028-F41R",
+      fhir_patient_id: "p1",
+      patient_symptoms: "Fiebre de 38,5 °C y dolor de cabeza desde ayer",
+    },
+  });
+  expect(fromFhir.status(), "create RX-20261028-F41R from FHIR").toBe(201);
+  await page.goto("/prescriptions/session-RX-20261028-F41R");
+  await expect(page.getByText("Origen: FHIR Patient/p1")).toBeVisible();
+  await page.screenshot({ path: "docs/detail-fhir.png" });
 });

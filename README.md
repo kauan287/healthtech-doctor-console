@@ -6,6 +6,7 @@
 The web console where a doctor reviews prescriptions proposed by AI agents.
 The [HealthTech Agent Orchestrator](https://github.com/kauan287/healthtech-agent-orchestrator) runs a triage agent and a safety agent on each request, then holds the prescription until a doctor decides.
 This console lists that queue, shows the proposal next to the allergy check, records the approval or rejection, and draws the HMAC-signed audit chain behind every prescription.
+The doctor either types the patient's allergies or has the orchestrator read the active ones from an HL7 FHIR R4 server, and can download any verified prescription as a FHIR Bundle.
 If someone edits the orchestrator's database by hand, the API withholds the clinical data and the console shows a red banner with no way to decide, so nobody can approve a forged prescription.
 
 **Live demo.** https://healthtech-doctor-console.onrender.com. The API runs on a free plan that sleeps when idle, so the first request takes about a minute. The console says so while it waits.
@@ -16,12 +17,17 @@ The UI text is in Spanish because the demo targets Spanish-speaking clinics. Cod
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | ![Queue with pending, approved, rejected and tampered prescriptions](docs/queue.png) | ![Detail of a pending prescription with an allergy alert, the decision panel and the audit chain](docs/detail.png) |
 
+A prescription whose allergies came from FHIR names the patient it read them from:
+
+![Detail of a prescription read from FHIR Patient/p1, with its active Paracetamol allergy and the allergy alert](docs/detail-fhir.png)
+
 ## What this project shows
 
 - One table per domain concept drives the UI. [`src/domain/status.ts`](src/domain/status.ts) maps each API status to its label, badge colour and whether the doctor can still decide. No component branches on a status string to pick a colour.
 - The API response is parsed once at the boundary. [`src/domain/prescription.ts`](src/domain/prescription.ts) turns it into a union of `VerifiedPrescription` and `TamperedPrescription`. The API already withholds the clinical fields of a tampered record. The parser also files any record whose `audit_chain_valid` is false as tampered, and `TamperedPrescription` has no clinical fields, so no screen can render them even if a response carried them.
 - Types come from the API contract. `npm run gen:api` writes [`src/api/schema.d.ts`](src/api/schema.d.ts) from the orchestrator's OpenAPI document, and CI fails if the committed file drifts.
 - Errors read as plain Spanish. [`src/api/errors.ts`](src/api/errors.ts) turns a 409, a 429 with `Retry-After`, or a network failure into a sentence a doctor can act on.
+- FHIR in both directions. In **Leer de FHIR** mode, the new-prescription form sends a FHIR patient id to `POST /api/v1/prescriptions/from-fhir`, and the orchestrator reads that patient's active allergies. The parser maps `fhir_patient` into the verified prescription's `patient.source`, so the detail page can say **Origen: FHIR Patient/p1**. **Exportar FHIR (JSON)** downloads the signed Bundle. The end-to-end test runs against [`e2e/fhir-server.ts`](e2e/fhir-server.ts), a fake FHIR server with one active and one inactive allergy, and checks that only the active one reaches the safety agent.
 - Component tests run the whole app against [MSW](https://mswjs.io) handlers and assert what the doctor sees. See [`src/pages/DetailPage.test.tsx`](src/pages/DetailPage.test.tsx).
 - End-to-end tests drive a real orchestrator with no mocks. [`e2e/console.spec.ts`](e2e/console.spec.ts) approves a prescription, then edits the signed details and timestamps in the SQLite file and checks that the console shows the red banner and offers no decision.
 
@@ -48,6 +54,7 @@ cd healthtech-agent-orchestrator
 uv sync
 ENVIRONMENT=development LLM_PROVIDER=demo DATABASE_URL=sqlite:////tmp/orchestrator.db \
   CORS_ORIGINS=http://localhost:5173,http://localhost:4173 \
+  FHIR_BASE_URL=http://localhost:8090/fhir \
   uv run uvicorn src.server:app --port 8000
 ```
 
@@ -57,6 +64,8 @@ Then start the console:
 npm ci
 npm run dev
 ```
+
+`FHIR_BASE_URL` points at the fake FHIR server that the end-to-end tests start. Run `node e2e/fhir-server.ts` to try **Leer de FHIR** with patient `p1`, or set `FHIR_BASE_URL=https://hapi.fhir.org/baseR4` to read the public HAPI server.
 
 Open http://localhost:5173. To use another API, set `VITE_API_URL`, for example `VITE_API_URL=https://healthtech-orchestrator.onrender.com npm run dev`.
 `npm run build` refuses to run without `VITE_API_URL`, so a production bundle never points at localhost by accident.
@@ -72,7 +81,7 @@ Open http://localhost:5173. To use another API, set `VITE_API_URL`, for example 
 | `npm run gen:api`     | Regenerates the API types from `$VITE_API_URL/openapi.json` |
 | `npm run screenshots` | Regenerates `docs/*.png`                                    |
 
-The end-to-end tests tamper with the orchestrator's database, so they need its SQLite path:
+The end-to-end tests tamper with the orchestrator's database, so they need its SQLite path. Playwright starts the fake FHIR server on port 8090 itself, so the orchestrator needs `FHIR_BASE_URL=http://localhost:8090/fhir`:
 
 ```bash
 npx playwright install chromium
@@ -90,7 +99,7 @@ src/
   components/   badges, audit timeline, decision panel, layout, wake-up notice
   pages/        queue, detail and new prescription screens, with their tests
   test/         MSW server, fixtures, render helper
-e2e/            Playwright tests and the screenshot script
+e2e/            Playwright tests, the screenshot script and the fake FHIR server
 ```
 
 Built with Vite, React 19, TypeScript, React Router, TanStack Query, Tailwind CSS, Vitest, MSW and Playwright.
