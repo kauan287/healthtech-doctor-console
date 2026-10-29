@@ -260,9 +260,7 @@ export function NewPrescriptionPage() {
               id="rx-fhir-patient-hint"
               className={`mt-1 text-xs ${showFhirIdError ? "font-medium text-red-700" : "text-slate-500"}`}
             >
-              {showFhirIdError
-                ? fhirIdError
-                : "Las alergias activas se leen del servidor FHIR (HAPI R4)."}
+              {showFhirIdError ? fhirIdError : "Las alergias activas se leen del servidor FHIR R4."}
             </p>
           </div>
         )}
