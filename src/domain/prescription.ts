@@ -77,6 +77,9 @@ export function parsePrescription(raw: ApiPrescription): Prescription {
 
 export const PRESCRIPTION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
+/** The FHIR R4 id datatype, as the orchestrator checks it. */
+export const FHIR_PATIENT_ID_PATTERN = /^[A-Za-z0-9\-.]{1,64}$/;
+
 export function newPrescriptionId(): string {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   const suffix = crypto.getRandomValues(new Uint16Array(1))[0] ?? 0;

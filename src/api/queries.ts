@@ -3,7 +3,10 @@ import { parsePrescription, type AuditTrail, type Prescription } from "../domain
 import { api, ApiError, unwrap } from "./client";
 import type { components } from "./schema";
 
-type CreateRequest = components["schemas"]["CreatePrescriptionRequest"];
+/** The doctor either types the allergies or has the orchestrator read them from a FHIR Patient. */
+export type NewPrescription =
+  | { source: "manual"; body: components["schemas"]["CreatePrescriptionRequest"] }
+  | { source: "fhir"; body: components["schemas"]["CreateFromFhirRequest"] };
 export type Decision = components["schemas"]["DoctorApprovalRequest"];
 
 const QUEUE_REFRESH_MS = 15_000;
@@ -68,8 +71,14 @@ export function useAuditTrail(threadId: string) {
 export function useCreatePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: CreateRequest) =>
-      parsePrescription(await unwrap(api.POST("/api/v1/prescriptions", { body }))),
+    mutationFn: async (request: NewPrescription) =>
+      parsePrescription(
+        await unwrap(
+          request.source === "manual"
+            ? api.POST("/api/v1/prescriptions", { body: request.body })
+            : api.POST("/api/v1/prescriptions/from-fhir", { body: request.body }),
+        ),
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.list, exact: true }),
   });
 }

@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { expect, test } from "vitest";
-import { API } from "../test/fixtures";
+import { API, pending, trail } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
 
@@ -112,4 +112,104 @@ test("the form names the window", () => {
   renderApp("/new");
 
   expect(document.title).toBe("Nueva receta · HealthTech");
+});
+
+async function fillFhirForm(patientId: string) {
+  const { user } = renderApp("/new");
+  const id = screen.getByLabelText("Identificador de la receta");
+  await user.clear(id);
+  await user.type(id, "RX-F1");
+  await user.type(screen.getByLabelText("Síntomas"), "Fiebre");
+  await user.click(screen.getByRole("radio", { name: "Leer de FHIR" }));
+  await user.type(screen.getByLabelText("ID de paciente FHIR"), patientId);
+  await user.click(screen.getByRole("button", { name: "Crear receta" }));
+}
+
+function answerFromFhir(response: () => Response) {
+  const bodies: unknown[] = [];
+  server.use(
+    http.post(`${API}/prescriptions/from-fhir`, async ({ request }) => {
+      bodies.push(await request.json());
+      return response();
+    }),
+  );
+  return bodies;
+}
+
+test("reading the allergies from FHIR posts the patient id and opens the new prescription", async () => {
+  const created = pending("RX-F1", {
+    patient_allergies: ["Paracetamol"],
+    fhir_patient: "Patient/p1",
+  });
+  const bodies = answerFromFhir(() => HttpResponse.json(created, { status: 201 }));
+  server.use(
+    http.get(`${API}/prescriptions/session-RX-F1`, () => HttpResponse.json(created)),
+    http.get(`${API}/prescriptions/session-RX-F1/audit`, () =>
+      HttpResponse.json(trail("RX-F1", true)),
+    ),
+  );
+
+  await fillFhirForm("p1");
+
+  expect(await screen.findByRole("heading", { level: 1, name: "RX-F1" })).toBeInTheDocument();
+  expect(bodies).toEqual([
+    { prescription_id: "RX-F1", fhir_patient_id: "p1", patient_symptoms: "Fiebre" },
+  ]);
+});
+
+test("the allergy source is a radio group that starts on typing them", () => {
+  renderApp("/new");
+
+  const group = screen.getByRole("group", { name: "Origen de las alergias" });
+  expect(within(group).getByRole("radio", { name: "Escribirlas" })).toBeChecked();
+  expect(within(group).getByRole("radio", { name: "Leer de FHIR" })).not.toBeChecked();
+  expect(screen.getByLabelText("Alergias conocidas")).toBeInTheDocument();
+  expect(screen.queryByLabelText("ID de paciente FHIR")).not.toBeInTheDocument();
+});
+
+test.each([
+  {
+    status: 422,
+    detail: "FHIR patient p404 not found.",
+    message: "No hay ningún paciente con el ID p404 en el servidor FHIR. Revisa el ID.",
+  },
+  {
+    status: 422,
+    detail: "The allergies of Patient/p404 exceed the prescription limits.",
+    message:
+      "El paciente p404 tiene más alergias activas de las que admite una receta: hasta 50, de 200 caracteres como máximo.",
+  },
+  {
+    status: 502,
+    detail: "FHIR server unavailable.",
+    message:
+      "El servidor FHIR no respondió o devolvió datos no válidos. Inténtalo de nuevo en unos minutos.",
+  },
+  {
+    status: 503,
+    detail: "FHIR server not configured.",
+    message: "Esta demo no tiene un servidor FHIR configurado. Escribe las alergias a mano.",
+  },
+])(
+  "a $status from the FHIR read says so in plain Spanish ($detail)",
+  async ({ status, detail, message }) => {
+    answerFromFhir(() => HttpResponse.json({ detail }, { status }));
+
+    await fillFhirForm("p404");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  },
+);
+
+test("an invalid FHIR patient id is blocked on submit before any request", async () => {
+  const bodies = answerFromFhir(() => HttpResponse.json({}, { status: 500 }));
+
+  await fillFhirForm("Patient/p1");
+
+  const patientId = screen.getByLabelText("ID de paciente FHIR");
+  expect(patientId).toHaveAttribute("aria-invalid", "true");
+  expect(patientId).toHaveAccessibleDescription(
+    "Usa de 1 a 64 letras, números, puntos o guiones, sin espacios ni barras.",
+  );
+  expect(bodies).toEqual([]);
 });
