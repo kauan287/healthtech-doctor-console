@@ -25,6 +25,14 @@ export function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   );
 }
 
+export function FhirSourceBadge({ reference }: { reference: string }) {
+  return (
+    <Badge className="bg-indigo-50 text-indigo-800 ring-indigo-600/25">
+      {`Origen: FHIR ${reference}`}
+    </Badge>
+  );
+}
+
 export function SafetyBadge({ approved }: { approved: boolean }) {
   const view = approved ? SAFETY.safe : SAFETY.alert;
   return <Badge className={view.badge}>{view.label}</Badge>;

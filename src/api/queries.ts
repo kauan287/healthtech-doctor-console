@@ -83,6 +83,24 @@ export function useCreatePrescription() {
   });
 }
 
+/** Refused with a 409 once the chain is invalid, so the page refreshes to show why. */
+export function useFhirExport(threadId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (): Promise<Blob> =>
+      unwrap(
+        api.GET("/api/v1/prescriptions/{thread_id}/fhir", {
+          params: { path: { thread_id: threadId } },
+          parseAs: "blob",
+        }),
+      ),
+    onError: (error) => {
+      if (!(error instanceof ApiError) || error.status !== 409) return;
+      return queryClient.invalidateQueries({ queryKey: keys.detail(threadId) });
+    },
+  });
+}
+
 export function useDecision(threadId: string) {
   const queryClient = useQueryClient();
   return useMutation({
