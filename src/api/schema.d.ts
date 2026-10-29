@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prescriptions/from-fhir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the patient's allergies from the FHIR server, then run the agents */
+        post: operations["create_prescription_from_fhir_api_v1_prescriptions_from_fhir_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prescriptions/{thread_id}": {
         parameters: {
             query?: never;
@@ -107,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prescriptions/{thread_id}/fhir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the prescription as a FHIR R4 Bundle with a signed Provenance */
+        get: operations["export_fhir_api_v1_prescriptions__thread_id__fhir_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -139,6 +173,15 @@ export interface components {
             detail: string;
             /** Entries */
             entries: components["schemas"]["AuditEntryResponse"][];
+        };
+        /** CreateFromFhirRequest */
+        CreateFromFhirRequest: {
+            /** Prescription Id */
+            prescription_id: string;
+            /** Fhir Patient Id */
+            fhir_patient_id: string;
+            /** Patient Symptoms */
+            patient_symptoms: string;
         };
         /** CreatePrescriptionRequest */
         CreatePrescriptionRequest: {
@@ -205,6 +248,11 @@ export interface components {
              * @description When the triage agent signed its entry, ISO 8601.
              */
             created_at: string | null;
+            /**
+             * Fhir Patient
+             * @description The FHIR Patient the allergies were read from, e.g. Patient/123. Signed.
+             */
+            fhir_patient: string | null;
         };
         /**
          * Status
@@ -348,6 +396,58 @@ export interface operations {
             };
         };
     };
+    create_prescription_from_fhir_api_v1_prescriptions_from_fhir_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFromFhirRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionResponse"];
+                };
+            };
+            /** @description A prescription with this id already exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The FHIR patient does not exist. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The FHIR server failed or answered with something other than FHIR. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No FHIR server is configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_prescription_api_v1_prescriptions__thread_id__get: {
         parameters: {
             query?: never;
@@ -440,6 +540,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuditTrailResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_fhir_api_v1_prescriptions__thread_id__fhir_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/fhir+json": unknown;
+                };
+            };
+            /** @description Prescription not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The audit chain is invalid. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
