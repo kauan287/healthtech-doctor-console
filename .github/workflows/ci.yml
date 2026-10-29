@@ -56,6 +56,7 @@ jobs:
           uv sync --frozen
           ENVIRONMENT=development LLM_PROVIDER=demo \
           DATABASE_URL="sqlite:///$ORCHESTRATOR_DB" CORS_ORIGINS=http://localhost:4173 \
+          FHIR_BASE_URL=http://localhost:8090/fhir \
             nohup uv run uvicorn src.server:app --port 8000 > ../orchestrator.log 2>&1 &
       - name: Wait for /health/ready
         run: |
@@ -72,7 +73,7 @@ jobs:
           npm run gen:api
           git diff --exit-code src/api/schema.d.ts
       - run: npx playwright install --with-deps chromium
-      - name: Playwright against vite preview
+      - name: Playwright against vite preview and the fake FHIR server
         run: npm run test:e2e
         env:
           CI: true

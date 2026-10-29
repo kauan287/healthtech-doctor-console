@@ -23,6 +23,7 @@ export function pending(id: string, overrides: Partial<ApiPrescription> = {}): A
     urgency_level: "MEDIO",
     triage_reasoning: "Antipirético de primera línea.",
     created_at: "2026-10-28T09:15:00+00:00",
+    fhir_patient: null,
     ...overrides,
   };
 }
@@ -54,6 +55,7 @@ export function tampered(id: string): ApiPrescription {
     urgency_level: null,
     triage_reasoning: null,
     created_at: null,
+    fhir_patient: null,
   };
 }
 

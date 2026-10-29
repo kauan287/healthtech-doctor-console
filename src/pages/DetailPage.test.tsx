@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { delay, http, HttpResponse } from "msw";
 import { expect, test } from "vitest";
 import { API, decided, pending, tampered, trail } from "../test/fixtures";
@@ -188,4 +188,66 @@ test("the detail names the window after the prescription and announces that it i
   expect(screen.getByRole("status")).toHaveTextContent("Cargando receta…");
   expect(await screen.findByRole("heading", { level: 1, name: "RX-1" })).toBeInTheDocument();
   expect(document.title).toBe("RX-1 · HealthTech");
+});
+
+test("a prescription read from FHIR names the patient and shows the allergies as read", async () => {
+  serve(pending("RX-F1", { fhir_patient: "Patient/p1", patient_allergies: ["Paracetamol"] }), true);
+  renderApp("/prescriptions/session-RX-F1");
+
+  const patient = await screen.findByRole("region", { name: "Paciente" });
+  expect(patient).toHaveTextContent("Origen: FHIR Patient/p1");
+  expect(within(patient).getByText("Paracetamol")).toBeInTheDocument();
+});
+
+test("a prescription with typed allergies names no FHIR origin", async () => {
+  serve(pending("RX-1"), true);
+  renderApp("/prescriptions/session-RX-1");
+
+  const patient = await screen.findByRole("region", { name: "Paciente" });
+  expect(patient).toHaveTextContent("Ibuprofeno");
+  expect(patient).not.toHaveTextContent("Origen");
+});
+
+test("the FHIR export is offered for a verified prescription and hidden for a tampered one", async () => {
+  serve(pending("RX-1"), true);
+  serve(tampered("RX-9"), false);
+  renderApp("/prescriptions/session-RX-1");
+  expect(await screen.findByRole("button", { name: "Exportar FHIR (JSON)" })).toBeEnabled();
+  cleanup();
+
+  renderApp("/prescriptions/session-RX-9");
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Cadena manipulada");
+  expect(screen.queryByRole("button", { name: "Exportar FHIR (JSON)" })).not.toBeInTheDocument();
+});
+
+test("an export refused with a 409 says why and refreshes the page to the tampered state", async () => {
+  let tamperedSinceLoad = false;
+  serve(pending("RX-1"), true);
+  server.use(
+    http.get(`${API}/prescriptions/session-RX-1/fhir`, () => {
+      tamperedSinceLoad = true;
+      return HttpResponse.json(
+        { detail: "Audit chain is invalid; the prescription is not exported." },
+        { status: 409 },
+      );
+    }),
+    http.get(`${API}/prescriptions/session-RX-1`, () =>
+      HttpResponse.json(tamperedSinceLoad ? tampered("RX-1") : pending("RX-1")),
+    ),
+    http.get(`${API}/prescriptions/session-RX-1/audit`, () =>
+      HttpResponse.json(trail("RX-1", !tamperedSinceLoad)),
+    ),
+  );
+  const { user } = renderApp("/prescriptions/session-RX-1");
+
+  await user.click(await screen.findByRole("button", { name: "Exportar FHIR (JSON)" }));
+
+  expect(
+    await screen.findByText(
+      "No se pudo exportar: la cadena de auditoría de la receta dejó de ser válida. Abajo se muestra su estado actual.",
+    ),
+  ).toBeInTheDocument();
+  expect(await screen.findByText(/Cadena manipulada/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Exportar FHIR (JSON)" })).not.toBeInTheDocument();
 });

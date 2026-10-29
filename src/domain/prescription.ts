@@ -16,10 +16,13 @@ export interface TamperedPrescription extends Identity {
   status: "INVALID";
 }
 
+/** Where the allergies came from: typed by the doctor, or read from a FHIR server's Patient. */
+export type AllergySource = { kind: "manual" } | { kind: "fhir"; reference: string };
+
 export interface VerifiedPrescription extends Identity {
   status: Exclude<Status, "INVALID">;
   createdAt: string;
-  patient: { symptoms: string; allergies: string[] };
+  patient: { symptoms: string; allergies: string[]; source: AllergySource };
   proposal: { medication: string; dosage: string; reasoning: string; urgency: Urgency };
   safety: { approved: boolean; notes: string };
   decision: { approved: boolean; comments: string } | null;
@@ -53,6 +56,10 @@ export function parsePrescription(raw: ApiPrescription): Prescription {
     patient: {
       symptoms: required(raw.patient_symptoms, "patient_symptoms"),
       allergies: required(raw.patient_allergies, "patient_allergies"),
+      source:
+        raw.fhir_patient === null
+          ? { kind: "manual" }
+          : { kind: "fhir", reference: raw.fhir_patient },
     },
     proposal: {
       medication: required(raw.proposed_medication, "proposed_medication"),
@@ -69,6 +76,9 @@ export function parsePrescription(raw: ApiPrescription): Prescription {
 }
 
 export const PRESCRIPTION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+/** The FHIR R4 id datatype, as the orchestrator checks it. */
+export const FHIR_PATIENT_ID_PATTERN = /^[A-Za-z0-9\-.]{1,64}$/;
 
 export function newPrescriptionId(): string {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");

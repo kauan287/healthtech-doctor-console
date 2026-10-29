@@ -1,15 +1,25 @@
 import { useState, type SubmitEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
-import { describeError } from "../api/errors";
-import { useCreatePrescription } from "../api/queries";
+import { describeFhirError, describeError } from "../api/errors";
+import { useCreatePrescription, type NewPrescription } from "../api/queries";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { usePageTitle } from "../components/usePageTitle";
-import { newPrescriptionId, PRESCRIPTION_ID_PATTERN } from "../domain/prescription";
+import {
+  FHIR_PATIENT_ID_PATTERN,
+  newPrescriptionId,
+  PRESCRIPTION_ID_PATTERN,
+  type AllergySource,
+} from "../domain/prescription";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 focus:outline-none disabled:bg-slate-100 aria-invalid:border-red-500";
 
 const MAX_ALLERGIES = 50;
+
+const SOURCES = [
+  { kind: "manual", label: "Escribirlas" },
+  { kind: "fhir", label: "Leer de FHIR" },
+] as const satisfies readonly { kind: AllergySource["kind"]; label: string }[];
 
 function withAllergy(allergies: string[], draft: string): string[] {
   const allergy = draft.trim();
@@ -27,12 +37,19 @@ export function NewPrescriptionPage() {
   const [symptoms, setSymptoms] = useState("");
   const [allergyDraft, setAllergyDraft] = useState("");
   const [allergies, setAllergies] = useState<string[]>([]);
+  const [source, setSource] = useState<AllergySource["kind"]>("manual");
+  const [fhirPatientId, setFhirPatientId] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const idError = PRESCRIPTION_ID_PATTERN.test(id)
     ? null
     : "Usa solo letras, números, puntos, guiones y guiones bajos, sin espacios.";
   const showIdError = submitted && idError !== null;
+  const fhirIdError =
+    source === "fhir" && !FHIR_PATIENT_ID_PATTERN.test(fhirPatientId.trim())
+      ? "Usa de 1 a 64 letras, números, puntos o guiones, sin espacios ni barras."
+      : null;
+  const showFhirIdError = submitted && fhirIdError !== null;
   const symptomsError = symptoms.trim() === "" ? "Describe los síntomas del paciente." : null;
   const allergiesFull = allergies.length >= MAX_ALLERGIES;
 
@@ -51,13 +68,25 @@ export function NewPrescriptionPage() {
   function onSubmit(event: SubmitEvent) {
     event.preventDefault();
     setSubmitted(true);
-    if (idError || symptomsError) return;
+    if (idError || symptomsError || fhirIdError) return;
     create.mutate(
-      {
-        prescription_id: id,
-        patient_symptoms: symptoms.trim(),
-        patient_allergies: withAllergy(allergies, allergyDraft),
-      },
+      source === "manual"
+        ? {
+            source,
+            body: {
+              prescription_id: id,
+              patient_symptoms: symptoms.trim(),
+              patient_allergies: withAllergy(allergies, allergyDraft),
+            },
+          }
+        : {
+            source,
+            body: {
+              prescription_id: id,
+              fhir_patient_id: fhirPatientId.trim(),
+              patient_symptoms: symptoms.trim(),
+            },
+          },
       {
         onSuccess: (rx) => {
           void navigate(`/prescriptions/${encodeURIComponent(rx.threadId)}`);
@@ -128,68 +157,116 @@ export function NewPrescriptionPage() {
           )}
         </div>
 
-        <div>
-          <label htmlFor="rx-allergy" className="block text-sm font-medium text-slate-700">
-            Alergias conocidas
-          </label>
-          <div className="mt-1 flex gap-2">
-            <input
-              id="rx-allergy"
-              value={allergyDraft}
-              onChange={(event) => {
-                setAllergyDraft(event.target.value);
-              }}
-              onKeyDown={onAllergyKey}
-              maxLength={200}
-              disabled={allergiesFull}
-              placeholder="Ibuprofeno"
-              aria-describedby="rx-allergy-hint"
-              className={inputClass}
-            />
-            <button
-              type="button"
-              onClick={addAllergy}
-              disabled={allergiesFull}
-              className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
-            >
-              Añadir
-            </button>
+        <fieldset>
+          <legend className="block text-sm font-medium text-slate-700">
+            Origen de las alergias
+          </legend>
+          <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+            {SOURCES.map((option) => (
+              <label
+                key={option.kind}
+                className="inline-flex items-center gap-2 text-sm text-slate-800"
+              >
+                <input
+                  type="radio"
+                  name="allergy-source"
+                  value={option.kind}
+                  checked={source === option.kind}
+                  onChange={() => {
+                    setSource(option.kind);
+                  }}
+                  className="size-4 accent-teal-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                />
+                {option.label}
+              </label>
+            ))}
           </div>
-          <p id="rx-allergy-hint" className="mt-1 text-xs text-slate-500">
-            {allergiesFull
-              ? `Has llegado al máximo de ${String(MAX_ALLERGIES)} alergias.`
-              : "Pulsa Intro para añadir cada alergia."}
-          </p>
-          {allergies.length > 0 && (
-            <ul aria-label="Alergias añadidas" className="mt-2 flex flex-wrap gap-2">
-              {allergies.map((allergy) => (
-                <li
-                  key={allergy}
-                  className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-1 pr-1 pl-3 text-sm text-slate-800"
-                >
-                  {allergy}
-                  <button
-                    type="button"
-                    aria-label={`Quitar ${allergy}`}
-                    onClick={() => {
-                      setAllergies(allergies.filter((known) => known !== allergy));
-                    }}
-                    className="rounded-full px-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-teal-600"
+        </fieldset>
+
+        {source === "manual" ? (
+          <div>
+            <label htmlFor="rx-allergy" className="block text-sm font-medium text-slate-700">
+              Alergias conocidas
+            </label>
+            <div className="mt-1 flex gap-2">
+              <input
+                id="rx-allergy"
+                value={allergyDraft}
+                onChange={(event) => {
+                  setAllergyDraft(event.target.value);
+                }}
+                onKeyDown={onAllergyKey}
+                maxLength={200}
+                disabled={allergiesFull}
+                placeholder="Ibuprofeno"
+                aria-describedby="rx-allergy-hint"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={addAllergy}
+                disabled={allergiesFull}
+                className="rounded-lg px-4 text-sm font-medium text-teal-800 ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
+              >
+                Añadir
+              </button>
+            </div>
+            <p id="rx-allergy-hint" className="mt-1 text-xs text-slate-500">
+              {allergiesFull
+                ? `Has llegado al máximo de ${String(MAX_ALLERGIES)} alergias.`
+                : "Pulsa Intro para añadir cada alergia."}
+            </p>
+            {allergies.length > 0 && (
+              <ul aria-label="Alergias añadidas" className="mt-2 flex flex-wrap gap-2">
+                {allergies.map((allergy) => (
+                  <li
+                    key={allergy}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-1 pr-1 pl-3 text-sm text-slate-800"
                   >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                    {allergy}
+                    <button
+                      type="button"
+                      aria-label={`Quitar ${allergy}`}
+                      onClick={() => {
+                        setAllergies(allergies.filter((known) => known !== allergy));
+                      }}
+                      className="rounded-full px-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-teal-600"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="rx-fhir-patient" className="block text-sm font-medium text-slate-700">
+              ID de paciente FHIR
+            </label>
+            <input
+              id="rx-fhir-patient"
+              value={fhirPatientId}
+              onChange={(event) => {
+                setFhirPatientId(event.target.value);
+              }}
+              maxLength={64}
+              placeholder="305514"
+              aria-invalid={showFhirIdError}
+              aria-describedby="rx-fhir-patient-hint"
+              className={`${inputClass} mt-1 font-mono`}
+            />
+            <p
+              id="rx-fhir-patient-hint"
+              className={`mt-1 text-xs ${showFhirIdError ? "font-medium text-red-700" : "text-slate-500"}`}
+            >
+              {showFhirIdError ? fhirIdError : "Las alergias activas se leen del servidor FHIR R4."}
+            </p>
+          </div>
+        )}
 
         {create.error && (
-          <ErrorNotice
-            message={describeError(create.error, {
-              conflict: `Ya existe una receta con el identificador ${create.variables.prescription_id}. Cambia el identificador e inténtalo de nuevo.`,
-            })}
-          />
+          <ErrorNotice message={createErrorMessage(create.error, create.variables)} />
         )}
 
         <div className="flex justify-end">
@@ -204,4 +281,11 @@ export function NewPrescriptionPage() {
       </form>
     </section>
   );
+}
+
+function createErrorMessage(error: Error, request: NewPrescription): string {
+  const conflict = `Ya existe una receta con el identificador ${request.body.prescription_id}. Cambia el identificador e inténtalo de nuevo.`;
+  return request.source === "manual"
+    ? describeError(error, { conflict })
+    : describeFhirError(error, { patientId: request.body.fhir_patient_id, conflict });
 }

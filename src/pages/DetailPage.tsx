@@ -1,18 +1,32 @@
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { describeError } from "../api/errors";
-import { useAuditTrail, useDecision, usePrescription } from "../api/queries";
+import { useAuditTrail, useDecision, useFhirExport, usePrescription } from "../api/queries";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DecisionPanel } from "../components/DecisionPanel";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { usePageTitle } from "../components/usePageTitle";
-import { SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
+import { FhirSourceBadge, SafetyBadge, StatusBadge, UrgencyBadge } from "../components/badges";
 import { formatDateTime } from "../domain/labels";
 import { isTampered, type AuditTrail, type VerifiedPrescription } from "../domain/prescription";
 import { STATUS } from "../domain/status";
 
 const CONFLICT =
   "No se pudo registrar tu decisión: la receta ya tenía una decisión o su cadena de auditoría dejó de ser válida. Abajo se muestra su estado actual.";
+const EXPORT_CONFLICT =
+  "No se pudo exportar: la cadena de auditoría de la receta dejó de ser válida. Abajo se muestra su estado actual.";
+
+function downloadFile({ blob, filename }: { blob: Blob; filename: string }) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  // Some browsers read the URL after click() returns, so revoking it at once can cancel the download.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
+}
 
 function BackLink() {
   return (
@@ -30,6 +44,7 @@ export function DetailPage() {
   const prescription = usePrescription(threadId);
   const audit = useAuditTrail(threadId);
   const decision = useDecision(threadId);
+  const fhirExport = useFhirExport(threadId);
   usePageTitle(prescription.data?.id ?? "Receta");
 
   const error = prescription.error ?? audit.error;
@@ -71,6 +86,22 @@ export function DetailPage() {
             {rx.id}
           </h1>
           <StatusBadge status={rx.status} />
+          {verified && (
+            <button
+              type="button"
+              disabled={fhirExport.isPending}
+              onClick={() => {
+                fhirExport.mutate(undefined, {
+                  onSuccess: (blob) => {
+                    downloadFile({ blob, filename: `${rx.id}.fhir.json` });
+                  },
+                });
+              }}
+              className="ml-auto rounded-lg bg-white px-4 py-2 text-sm font-medium text-teal-800 shadow-sm ring-1 ring-teal-300 ring-inset hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-60"
+            >
+              Exportar FHIR (JSON)
+            </button>
+          )}
         </div>
         {verified && (
           <p className="mt-1 text-sm text-slate-600">Creada el {formatDateTime(rx.createdAt)}</p>
@@ -80,6 +111,9 @@ export function DetailPage() {
       <ChainBanner trail={trail} />
       {decision.error && (
         <ErrorNotice message={describeError(decision.error, { conflict: CONFLICT })} />
+      )}
+      {fhirExport.error && (
+        <ErrorNotice message={describeError(fhirExport.error, { conflict: EXPORT_CONFLICT })} />
       )}
 
       {!verified ? (
@@ -150,9 +184,16 @@ function ChainBanner({ trail }: { trail: AuditTrail }) {
 function ClinicalRecord({ rx }: { rx: VerifiedPrescription }) {
   return (
     <div className="space-y-4">
-      <Card title="Paciente">
+      <Card
+        title="Paciente"
+        aside={
+          rx.patient.source.kind === "fhir" && (
+            <FhirSourceBadge reference={rx.patient.source.reference} />
+          )
+        }
+      >
         <Field label="Síntomas">{rx.patient.symptoms}</Field>
-        <Field label="Alergias">
+        <Field label={rx.patient.source.kind === "fhir" ? "Alergias activas" : "Alergias"}>
           {rx.patient.allergies.length === 0 ? "Ninguna conocida" : rx.patient.allergies.join(", ")}
         </Field>
       </Card>

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { tamper, uniqueId } from "./orchestrator";
 
@@ -51,12 +52,13 @@ test("a doctor approves a pending prescription and sees the signed decision", as
   ).toBeVisible();
 });
 
-test("tampering with the stored audit chain hides the clinical data and the decision panel", async ({
+test("tampering with the stored audit chain hides the clinical data, the decision panel and the FHIR export", async ({
   page,
 }) => {
   const id = uniqueId("RX-E2E-TAMPER");
   await createPrescription(page, { id, symptoms: "Fiebre y malestar general", allergies: [] });
   await expect(page.getByRole("button", { name: "Aprobar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar FHIR (JSON)" })).toBeVisible();
 
   tamper(id);
   await page.reload();
@@ -65,6 +67,7 @@ test("tampering with the stored audit chain hides the clinical data and the deci
   await expect(page.locator("main").getByText("Manipulada", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Aprobar" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Rechazar" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Exportar FHIR (JSON)" })).toHaveCount(0);
   await expect(page.getByText("Paracetamol")).toHaveCount(0);
   await expect(page.getByText("Morfina")).toHaveCount(0);
 
@@ -76,4 +79,43 @@ test("tampering with the stored audit chain hides the clinical data and the deci
     page.getByRole("list", { name: "Cadena de auditoría" }).getByText("not-a-date").first(),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Aprobar" })).toHaveCount(0);
+});
+
+test("allergies read from FHIR reach the safety check and the exported Bundle names the patient", async ({
+  page,
+}) => {
+  const id = uniqueId("RX-E2E-FHIR");
+  await page.goto("/new");
+  await page.getByLabel("Identificador de la receta").fill(id);
+  await page.getByLabel("Síntomas").fill("Fiebre de 38,5 °C y dolor de cabeza");
+  await page.getByRole("radio", { name: "Leer de FHIR" }).check();
+  await page.getByLabel("ID de paciente FHIR").fill("p1");
+  await page.getByRole("button", { name: "Crear receta" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: id })).toBeVisible();
+
+  const patient = page.getByRole("region", { name: "Paciente" });
+  await expect(patient).toContainText("Origen: FHIR Patient/p1");
+  await expect(patient.getByText("Paracetamol", { exact: true })).toBeVisible();
+  await expect(patient).not.toContainText("Ibuprofeno");
+  await expect(
+    page.getByRole("region", { name: "Verificación de seguridad" }).getByText("Alerta de alergia"),
+  ).toBeVisible();
+
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Exportar FHIR (JSON)" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe(`${id}.fhir.json`);
+  const bundle: unknown = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(bundle).toMatchObject({
+    resourceType: "Bundle",
+    entry: expect.arrayContaining([
+      {
+        fullUrl: expect.any(String),
+        resource: expect.objectContaining({
+          resourceType: "MedicationRequest",
+          subject: { reference: "Patient/p1" },
+        }),
+      },
+    ]),
+  });
 });

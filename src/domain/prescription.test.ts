@@ -13,7 +13,7 @@ test("a verified response becomes a prescription with its clinical record", () =
     threadId: "session-RX-1",
     status: "REJECTED",
     createdAt: "2026-10-28T09:15:00+00:00",
-    patient: { symptoms: "Fiebre alta", allergies: ["Ibuprofeno"] },
+    patient: { symptoms: "Fiebre alta", allergies: ["Ibuprofeno"], source: { kind: "manual" } },
     proposal: {
       medication: "Paracetamol",
       dosage: "500 mg cada 8 horas",
@@ -25,6 +25,12 @@ test("a verified response becomes a prescription with its clinical record", () =
   });
 });
 
+test("a response read from FHIR names the patient it came from", () => {
+  expect(parsePrescription(pending("RX-1", { fhir_patient: "Patient/p1" }))).toMatchObject({
+    patient: { source: { kind: "fhir", reference: "Patient/p1" } },
+  });
+});
+
 test("a pending response has no decision yet", () => {
   expect(parsePrescription(pending("RX-1"))).toMatchObject({ decision: null });
 });
@@ -32,7 +38,9 @@ test("a pending response has no decision yet", () => {
 test("a tampered response keeps only its identity, even when clinical fields come along", () => {
   const expected = { id: "RX-2", threadId: "session-RX-2", status: "INVALID" };
   expect(parsePrescription(tampered("RX-2"))).toEqual(expected);
-  expect(parsePrescription(pending("RX-2", { audit_chain_valid: false }))).toEqual(expected);
+  expect(
+    parsePrescription(pending("RX-2", { audit_chain_valid: false, fhir_patient: "Patient/p1" })),
+  ).toEqual(expected);
 });
 
 test("a verified response missing a clinical field is a contract error", () => {
